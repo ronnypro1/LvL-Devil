@@ -1,25 +1,176 @@
 <!doctype html>
+<html lang="es">
 <head>
-    <title>Game</title>
-    <meta charset="utf-8">
+  <title>Level Devil</title>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 
-    <script src="js/phaser.min.js"></script>
-    <script src="js/main.js"></script>
+  <script src="https://telegram.org/js/telegram-web-app.js"></script>
+  <script src="js/phaser.min.js"></script>
+  <script src="js/main.js"></script>
 
-    <style>
-        canvas {
-            margin: 0 auto;
-        }
-    </style>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body { width: 100vw; height: 100vh; overflow: hidden; background: #000; touch-action: none; }
+
+    /* ── PORTRAIT: juego arriba, controles abajo ── */
+    @media (orientation: portrait) {
+      #game-wrapper {
+        position: fixed; top: 0; left: 0;
+        width: 100vw; height: 100vh;
+        display: flex; flex-direction: column;
+        background: #111; overflow: hidden;
+      }
+      #canvas-area { flex: 1; display: flex; align-items: center; justify-content: center; overflow: hidden; }
+      #mobile-controls {
+        height: 160px; flex-shrink: 0;
+        display: flex; flex-direction: row;
+        align-items: center; justify-content: space-between;
+        padding: 10px 30px; gap: 16px;
+        background: rgba(0,0,0,0.75);
+      }
+      #controls-left, #controls-right { display: flex; align-items: center; justify-content: center; }
+    }
+
+    /* ── LANDSCAPE: flechas izq | juego centro | botones der ── */
+    @media (orientation: landscape) {
+      #game-wrapper {
+        position: fixed; top: 0; left: 0;
+        width: 100vw; height: 100vh;
+        display: flex; flex-direction: row;
+        background: #111; overflow: hidden;
+      }
+      #canvas-area { flex: 1; display: flex; align-items: center; justify-content: center; overflow: hidden; }
+      #mobile-controls { display: contents; }
+      #controls-left {
+        width: 150px; flex-shrink: 0; order: -1;
+        display: flex; align-items: center; justify-content: center;
+        background: rgba(0,0,0,0.75);
+      }
+      #controls-right {
+        width: 150px; flex-shrink: 0;
+        display: flex; flex-direction: column; align-items: center; justify-content: center;
+        gap: 20px; background: rgba(0,0,0,0.75);
+      }
+    }
+
+    /* ── Canvas ── */
+    canvas { display: block; max-width: 100%; max-height: 100%; }
+
+    /* ── D-Pad ── */
+    .dpad { position: relative; width: 130px; height: 130px; flex-shrink: 0; }
+    .btn-d {
+      position: absolute; width: 44px; height: 44px;
+      background: rgba(255,255,255,0.18); border: 2px solid rgba(255,255,255,0.4);
+      border-radius: 8px; display: flex; align-items: center; justify-content: center;
+      font-size: 20px; color: #fff; cursor: pointer;
+      -webkit-tap-highlight-color: transparent; transition: background 0.08s;
+      user-select: none;
+    }
+    .btn-d:active, .btn-d.pressed { background: rgba(255,255,255,0.55); }
+    .btn-left  { left: 0;    top: 43px; }
+    .btn-right { left: 86px; top: 43px; }
+    .btn-up    { left: 43px; top: 0;    }
+    .btn-down  { left: 43px; top: 86px; }
+
+    /* ── Botones de acción ── */
+    .action-btns { display: flex; gap: 14px; align-items: center; flex-wrap: wrap; justify-content: center; }
+    .btn-action {
+      width: 64px; height: 64px; border-radius: 50%;
+      border: 3px solid rgba(255,255,255,0.5);
+      display: flex; align-items: center; justify-content: center;
+      font-size: 22px; font-weight: bold; color: #fff;
+      cursor: pointer; -webkit-tap-highlight-color: transparent; flex-shrink: 0;
+      user-select: none;
+    }
+    .btn-action:active, .btn-action.pressed { filter: brightness(1.6); }
+    .btn-jump  { background: rgba(255,50,50,0.55); }
+  </style>
 </head>
 <body>
-    <div id="game"><p id="Message"></p></div>
-    <style>
-        #Message {
-            color: red;
-            font-size: 200%;
-        }
-            
-    </style>
-    <!-- <button id="size"><img src="images/icons/grow.png" height=20px></button> -->
+
+<div id="game-wrapper">
+
+  <div id="canvas-area">
+    <!-- Phaser monta el canvas aquí -->
+    <div id="game"><p id="Message" style="color:red;font-size:200%;"></p></div>
+  </div>
+
+  <!-- CONTROLES MÓVILES -->
+  <div id="mobile-controls">
+    <div id="controls-left">
+      <div class="dpad">
+        <div class="btn-d btn-left"  data-key="LEFT"  data-code="37">←</div>
+        <div class="btn-d btn-right" data-key="RIGHT" data-code="39">→</div>
+        <div class="btn-d btn-up"    data-key="UP"    data-code="38">↑</div>
+        <div class="btn-d btn-down"  data-key="DOWN"  data-code="40">↓</div>
+      </div>
+    </div>
+    <div id="controls-right">
+      <div class="action-btns">
+        <div class="btn-action btn-jump" data-key="SPACE" data-code="32">🦘</div>
+      </div>
+    </div>
+  </div>
+
+</div><!-- /game-wrapper -->
+
+<script>
+  /* ── Disparo de teclas para Phaser CE ── */
+  function fireKey(type, keyCode) {
+    const e = new KeyboardEvent(type, {
+      bubbles: true,
+      cancelable: true,
+      keyCode: keyCode,
+      which: keyCode,
+      charCode: 0
+    });
+    // Phaser CE escucha en document
+    document.dispatchEvent(e);
+    window.dispatchEvent(e);
+  }
+
+  document.querySelectorAll('[data-code]').forEach(btn => {
+    const code = parseInt(btn.dataset.code);
+
+    btn.addEventListener('touchstart', e => {
+      e.preventDefault();
+      btn.classList.add('pressed');
+      fireKey('keydown', code);
+    }, { passive: false });
+
+    btn.addEventListener('touchend', e => {
+      e.preventDefault();
+      btn.classList.remove('pressed');
+      fireKey('keyup', code);
+    }, { passive: false });
+
+    btn.addEventListener('touchcancel', e => {
+      btn.classList.remove('pressed');
+      fireKey('keyup', code);
+    }, { passive: false });
+
+    // Fallback mouse (para probar en desktop)
+    btn.addEventListener('mousedown', e => {
+      btn.classList.add('pressed');
+      fireKey('keydown', code);
+    });
+    btn.addEventListener('mouseup', e => {
+      btn.classList.remove('pressed');
+      fireKey('keyup', code);
+    });
+  });
+
+  /* ── Telegram Mini App ── */
+  if (window.Telegram && window.Telegram.WebApp) {
+    window.Telegram.WebApp.ready();
+    window.Telegram.WebApp.expand();
+    window.Telegram.WebApp.BackButton.show();
+    window.Telegram.WebApp.BackButton.onClick(function () {
+      window.Telegram.WebApp.close();
+    });
+  }
+</script>
+
 </body>
+</html>
